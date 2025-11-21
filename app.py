@@ -26,15 +26,22 @@ def limpar_numero_inteligente(valor):
     if numeros: return int(numeros[0])
     return 0.0
 
-# --- 2. CONEXÃO ---
+# --- 2. CONEXÃO (VERSÃO HÍBRIDA: PC E NUVEM) ---
 @st.cache_resource
 def conectar_gsheets():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    try:
-        creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
-    except FileNotFoundError:
-        caminho = r"C:\Users\Info\MAPA SHOW NACIONAL\credentials.json"
-        creds = Credentials.from_service_account_file(caminho, scopes=scopes)
+    
+    # 1. Tenta conectar pelo COFRE DA NUVEM (Streamlit Secrets)
+    if "gcp_service_account" in st.secrets:
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    
+    # 2. Se não achar, tenta conectar pelo ARQUIVO DO PC (Local)
+    else:
+        try:
+            creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+        except FileNotFoundError:
+            caminho = r"C:\Users\Info\MAPA SHOW NACIONAL\credentials.json"
+            creds = Credentials.from_service_account_file(caminho, scopes=scopes)
 
     client = gspread.authorize(creds)
     return client.open_by_key("1fvhCzt2ieZ4s-paXd3GLWgJho-9JE2oXCl14qKSpGDo")
