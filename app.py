@@ -4,15 +4,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import re
-import os # Necessário para verificar se a imagem existe
+import os 
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão Festa São Pedro", layout="wide")
 
-# --- NOME DA IMAGEM DE LAYOUT (A que você subiu no GitHub) ---
-NOME_IMAGEM_LAYOUT = "mapa_geral.png" # Certifique-se que o nome é esse
+# --- NOME DA IMAGEM DE LAYOUT ---
+NOME_IMAGEM_LAYOUT = "mapa_geral.png" 
 
-# --- 1. FUNÇÃO DE LIMPEZA ---
+# --- 1. FUNÇÕES DE LIMPEZA E CONEXÃO (MANTIDAS) ---
 def limpar_numero_inteligente(valor):
     valor_str = str(valor).upper().strip()
     if not valor_str or valor_str == "NONE" or valor_str == "NAN": return 0.0
@@ -30,7 +30,6 @@ def limpar_numero_inteligente(valor):
     if numeros: return int(numeros[0])
     return 0.0
 
-# --- 2. CONEXÃO ---
 @st.cache_resource
 def conectar_gsheets():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -46,7 +45,6 @@ def conectar_gsheets():
     client = gspread.authorize(creds)
     return client.open_by_key("1fvhCzt2ieZ4s-paXd3GLWgJho-9JE2oXCl14qKSpGDo")
 
-# --- 3. CARREGAR DADOS ---
 def carregar_dados():
     sh = conectar_gsheets()
     
@@ -66,7 +64,6 @@ def carregar_dados():
 
     return df, df_res
 
-# --- 4. SALVAR E ATUALIZAR ---
 def salvar_reserva(dados):
     sh = conectar_gsheets()
     sh.worksheet("RESERVAS").append_row(dados)
@@ -124,21 +121,21 @@ tab_mapa, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "📊 FINANCEIRO"])
 
 
 # ==========================================
-# ABA 1: MAPA (COM GRID NOVO)
+# ABA 1: MAPA (COM IMAGEM E GRID ESTÁVEL)
 # ==========================================
 with tab_mapa:
     
-    # --- VISUALIZAÇÃO DA IMAGEM DE CONTEXTO ---
-    # Mostra a imagem do layout para o usuário saber onde clicar no grid
-    st.header("Selecione a Mesa (Visualização)")
+    st.header("Visualização do Layout")
     
-    # Verifica se a imagem existe (no local ou na nuvem) e a mostra
+    # --- MOSTRA A IMAGEM GRANDE PARA CONTEXTO ---
     if os.path.exists(NOME_IMAGEM_LAYOUT):
         st.image(NOME_IMAGEM_LAYOUT, caption="Layout do Salão", use_column_width=True)
     else:
         st.warning(f"Imagem de Layout '{NOME_IMAGEM_LAYOUT}' não encontrada no GitHub.")
     
-    # --- FILTRO E SIDEBAR ---
+    st.subheader("Clique no Botão para Reservar")
+
+    # --- FILTRO DE SETOR ---
     if "Tipo_Item" in df_full.columns:
         setores = ["Todos"] + list(df_full["Tipo_Item"].unique())
         col_filtro, _ = st.columns([1, 3])
@@ -152,24 +149,19 @@ with tab_mapa:
     else:
         df_mapa = df_full
 
-    st.subheader("Grid Interativo (Clique abaixo)")
-
     # --- DESENHO DO MAPA GRID (FUNCIONAL) ---
     linhas_visiveis = df_mapa['Linha_Num'].unique()
     linhas_visiveis.sort()
     cols = df_mapa['Coluna_Num'].max()
 
-    # O Sidebar só aparece se uma mesa for clicada
     if "mesa_id" not in st.session_state:
         st.session_state["mesa_id"] = None
     
     m_id = st.session_state["mesa_id"]
 
-
     if len(linhas_visiveis) > 0:
         for l in range(1, int(linhas_visiveis.max()) + 1):
             
-            # Se a linha não existe no filtro (ex: pulou de 2 para 4), continue
             if l not in linhas_visiveis:
                 continue
 
@@ -230,7 +222,6 @@ with tab_mapa:
             elif status == "Reservado":
                 st.sidebar.warning("RESERVADO")
                 st.sidebar.write(f"👤 **{dados['Nome_Cliente']}**")
-                st.sidebar.write(f"📞 {dados['Telefone_Cliente']}")
                 
                 st.sidebar.markdown("---")
                 col1, col2 = st.sidebar.columns(2)
