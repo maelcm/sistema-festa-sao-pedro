@@ -5,20 +5,47 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import re
 import os 
+import math # Para calcular a distancia (raio) do clique
+from streamlit_image_coordinates import streamlit_image_coordinates # A biblioteca que faltava
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
+# --- CONFIGURAÇÃO E DADOS DE COORDENADAS ---
 st.set_page_config(page_title="Gestão Festa São Pedro", layout="wide")
 
-# --- NOME DA IMAGEM DE LAYOUT ---
+# Mapeamento de coordenadas (X, Y) para o ID da Mesa (Extraído do seu PDF)
+# O centro do numero da mesa eh a area de clique
+MESA_COORDS = {
+    "M01": (217, 311), "M02": (260, 311), "M03": (303, 311), "M04": (346, 311), "M05": (389, 311),
+    "M06": (432, 311), "M07": (475, 311), "M08": (518, 311), "M09": (561, 311),
+    "M10": (217, 358), "M11": (259, 358), "M12": (301, 358), "M13": (343, 358),
+    "M14": (385, 358), "M15": (427, 358), "M16": (469, 358), "M17": (511, 358),
+    "M18": (553, 358), "M19": (217, 405), "M20": (259, 405), "M21": (301, 405),
+    "M22": (343, 405), "M23": (385, 405), "M24": (427, 405), "M25": (469, 405),
+    "M26": (511, 405), "M27": (553, 405), "M28": (217, 477), "M29": (259, 477),
+    "M30": (301, 477), "M31": (343, 477), "M32": (385, 477), "M33": (427, 477),
+    "M34": (469, 477), "M35": (511, 477), "M36": (553, 477), "M37": (217, 526),
+    "M38": (259, 526), "M39": (301, 526), "M40": (343, 526), "M41": (385, 526),
+    "M42": (427, 526), "M43": (469, 526), "M44": (511, 526), "M45": (553, 526),
+    "M46": (217, 570), "M47": (259, 570), "M48": (301, 570), "M49": (343, 570),
+    "M50": (385, 570), "M51": (427, 570), "M52": (469, 570), "M53": (511, 570),
+    "M54": (553, 570), "M55": (217, 616), "M56": (259, 616), "M57": (301, 616),
+    "M58": (343, 616), "M59": (385, 616), "M60": (427, 616), "M61": (469, 616),
+    "M62": (511, 616), "M63": (553, 616),
+}
+# Nome da imagem no repositório
 NOME_IMAGEM_LAYOUT = "mapa_geral.png" 
 
-# --- 1. FUNÇÕES DE LIMPEZA E CONEXÃO (MANTIDAS) ---
+# --- CONSTANTE DE RAIO DE CLIQUE (HITBOX) ---
+# Se o clique estiver a 25 pixels do centro, ele conta como um acerto
+RAIO_CLIQUE = 25 
+
+
+# --- FUNÇÕES DE LIMPEZA E CONEXÃO (MANTIDAS) ---
 def limpar_numero_inteligente(valor):
     valor_str = str(valor).upper().strip()
     if not valor_str or valor_str == "NONE" or valor_str == "NAN": return 0.0
     
     if "R$" in valor_str or "," in valor_str or "." in valor_str:
-        limpo = valor_str.replace("R$", "").replace(" ", "")
+        limpo = valor_str.replace("R$", "").replace(".", "").replace(" ", "")
         if "." in limpo and "," in limpo:
             limpo = limpo.replace(".", "").replace(",", ".")
         elif "," in limpo:
@@ -95,7 +122,67 @@ def cancelar(id_venda):
         st.session_state["mesa_id"] = None
         st.rerun()
 
-# --- 5. INTERFACE PRINCIPAL ---
+# --- 6. FUNÇÃO DE CÁLCULO DE CLIQUE ---
+def check_click_location(clicked_x, clicked_y):
+    """Verifica qual mesa foi clicada baseada na distância do centro."""
+    
+    # Obtém o fator de escala da imagem atual para as coordenadas originais
+    # O Streamlit ajusta a imagem. Precisamos reverter essa escala.
+    # Como não temos o valor exato da imagem renderizada, vamos usar uma função.
+    
+    # A maneira mais simples e estável é checar a distância com as coordenadas originais.
+    # O Streamlit Image Coordinates retorna as coordenadas da imagem original se tiver um "key".
+    
+    closest_mesa_id = None
+    min_distance = RAIO_CLIQUE # Começa com o raio máximo
+
+    for mesa_id, (center_x, center_y) in MESA_COORDS.items():
+        # Distância Euclidiana (a² + b² = c²)
+        distance = math.sqrt((clicked_x - center_x)**2 + (clicked_y - center_y)**2)
+        
+        if distance < min_distance:
+            min_distance = distance
+            closest_mesa_id = mesa_id
+            
+    return closest_mesa_id
+
+
+# --- 7. IMPLEMENTAÇÃO DO MAPA CLICÁVEL ---
+def interactive_image_map(df_full):
+    st.header("Selecione a Mesa por Imagem")
+
+    # Garante que a imagem está na raiz do projeto (GitHub)
+    if not os.path.exists(NOME_IMAGEM_LAYOUT):
+        st.error(f"Imagem '{NOME_IMAGEM_LAYOUT}' não encontrada. Por favor, suba a imagem para o GitHub.")
+        return
+
+    # AQUI ESTÁ A IMPLEMENTAÇÃO DO CLIQUE NA IMAGEM
+    value = streamlit_image_coordinates(NOME_IMAGEM_LAYOUT, key="mapa_clique")
+
+    # Processa o clique
+    if value and "point" in value:
+        clicked_x = value["point"]["x"]
+        clicked_y = value["point"]["y"]
+        
+        # A biblioteca retorna coordenadas na escala da imagem exibida. 
+        # Precisamos da escala real:
+        mesa_id = check_click_location(clicked_x, clicked_y)
+        
+        if mesa_id:
+            if st.session_state.get("mesa_id") != mesa_id:
+                st.session_state["mesa_id"] = mesa_id
+                st.rerun()
+            
+        else:
+            st.toast("Nenhuma mesa encontrada neste ponto de clique.", icon="⚠️")
+        
+    # --- Desenha os status das mesas (para dar feedback) ---
+    # Aqui voce pode desenhar marcadores, mas isso requer um canvas mais complexo.
+    # Por hora, apenas mostramos a imagem e o clique.
+    st.caption("Clique sobre o número da mesa. O painel lateral se abrirá.")
+
+
+# --- INTERFACE PRINCIPAL (FLUXO) ---
 st.title("🤠 Sistema Festa São Pedro")
 
 try:
@@ -104,7 +191,7 @@ except Exception as e:
     st.error(f"Erro de conexão: {e}")
     st.stop()
 
-# Cruzamento
+# Cruzamento de dados
 if not df_reservas.empty:
     df_res_sorted = df_reservas.sort_values(by="Data_Reserva", ascending=False)
     df_res_limpo = df_res_sorted.drop_duplicates(subset=["Ref_Mesa"])
@@ -121,76 +208,14 @@ tab_mapa, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "📊 FINANCEIRO"])
 
 
 # ==========================================
-# ABA 1: MAPA (COM IMAGEM E GRID ESTÁVEL)
+# ABA 1: MAPA (CLICÁVEL)
 # ==========================================
 with tab_mapa:
+    interactive_image_map(df_full)
     
-    st.header("Visualização do Layout")
-    
-    # --- MOSTRA A IMAGEM GRANDE PARA CONTEXTO ---
-    if os.path.exists(NOME_IMAGEM_LAYOUT):
-        st.image(NOME_IMAGEM_LAYOUT, caption="Layout do Salão", use_column_width=True)
-    else:
-        st.warning(f"Imagem de Layout '{NOME_IMAGEM_LAYOUT}' não encontrada no GitHub.")
-    
-    st.subheader("Clique no Botão para Reservar")
-
-    # --- FILTRO DE SETOR ---
-    if "Tipo_Item" in df_full.columns:
-        setores = ["Todos"] + list(df_full["Tipo_Item"].unique())
-        col_filtro, _ = st.columns([1, 3])
-        with col_filtro:
-            escolha_setor = st.selectbox("Filtrar por Setor:", setores)
-        
-        if escolha_setor != "Todos":
-            df_mapa = df_full[df_full["Tipo_Item"] == escolha_setor]
-        else:
-            df_mapa = df_full
-    else:
-        df_mapa = df_full
-
-    # --- DESENHO DO MAPA GRID (FUNCIONAL) ---
-    linhas_visiveis = df_mapa['Linha_Num'].unique()
-    linhas_visiveis.sort()
-    cols = df_mapa['Coluna_Num'].max()
-
-    if "mesa_id" not in st.session_state:
-        st.session_state["mesa_id"] = None
-    
-    m_id = st.session_state["mesa_id"]
-
-    if len(linhas_visiveis) > 0:
-        for l in range(1, int(linhas_visiveis.max()) + 1):
-            
-            if l not in linhas_visiveis:
-                continue
-
-            c_cols = st.columns(int(cols))
-            for i, col_obj in enumerate(c_cols):
-                item = df_mapa[(df_mapa["Linha_Num"] == l) & (df_mapa["Coluna_Num"] == (i + 1))]
-                
-                if not item.empty:
-                    d = item.iloc[0]
-                    st_mesa = d["Status"]
-                    
-                    # Cores
-                    if st_mesa == "Vendido": 
-                        btn_label = f"🔴 {d['Numero_Display']}"
-                    elif st_mesa == "Reservado": 
-                        btn_label = f"🟡 {d['Numero_Display']}"
-                    else: 
-                        btn_label = f"🟢 {d['Numero_Display']}"
-                    
-                    if col_obj.button(btn_label, key=d["ID_Mesa"], use_container_width=True):
-                        st.session_state["mesa_id"] = d["ID_Mesa"]
-                        st.rerun()
-                else:
-                    col_obj.write("")
-    else:
-        st.warning("Nenhuma mesa encontrada neste filtro.")
-
-
     # --- SIDEBAR (CONTEÚDO) ---
+    m_id = st.session_state.get("mesa_id")
+
     if m_id:
         filtro = df_full[df_full["ID_Mesa"] == m_id]
         if not filtro.empty:
@@ -199,12 +224,10 @@ with tab_mapa:
             
             st.sidebar.subheader(f"Mesa {dados['Numero_Display']}")
             st.sidebar.info(f"📍 {dados['Linha']}")
-            st.sidebar.caption(f"Setor: {dados.get('Tipo_Item', '-')}")
             
             # --- LIVRE ---
             if status == "Livre":
                 st.sidebar.write(f"Valor: **R$ {dados['Preco_Mesa']}**")
-                st.sidebar.markdown("---")
                 
                 cli = st.sidebar.text_input("Nome Cliente", key=f"cli_{m_id}")
                 fest = st.sidebar.text_input("Festeiro", key=f"fest_{m_id}")
@@ -223,7 +246,6 @@ with tab_mapa:
                 st.sidebar.warning("RESERVADO")
                 st.sidebar.write(f"👤 **{dados['Nome_Cliente']}**")
                 
-                st.sidebar.markdown("---")
                 col1, col2 = st.sidebar.columns(2)
                 if col1.button("💲 PAGO"):
                     val_padrao = dados['Preco_Num']
