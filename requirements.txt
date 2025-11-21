@@ -1,6 +1,5 @@
 streamlit
 pandas
 gspread
-
 google-auth
 streamlit-image-coordinates
