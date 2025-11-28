@@ -4,9 +4,13 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import re
+import os # Importante para checar se a imagem existe
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão Festa São Pedro", layout="wide")
+
+# NOME DA IMAGEM
+NOME_IMAGEM_LAYOUT = "banda na praça (1).png"
 
 # --- 1. FUNÇÃO DE LIMPEZA ---
 def limpar_numero_inteligente(valor):
@@ -120,13 +124,14 @@ else:
 
 
 # ==========================================
-# ABAS
+# ABAS (AGORA SÃO 3)
 # ==========================================
-tab_mapa, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "📊 RELATORIO"])
+# Aqui criamos as abas: 1. Mapa(Grid), 2. Visualizar(Imagem), 3. Relatorio
+tab_mapa, tab_visual, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "👁️ VISUALIZAR MAPA", "📊 RELATORIO"])
 
 
 # ==========================================
-# ABA 1: MAPA
+# ABA 1: MAPA (SEU GRID DE BOTÕES)
 # ==========================================
 with tab_mapa:
     
@@ -145,7 +150,7 @@ with tab_mapa:
 
     st.caption("Clique na mesa para Reservar ou Vender")
 
-    # --- SIDEBAR (SEM FORMULÁRIO AGORA) ---
+    # --- SIDEBAR ---
     if "mesa_id" not in st.session_state:
         st.session_state["mesa_id"] = None
 
@@ -166,13 +171,10 @@ with tab_mapa:
                 st.sidebar.write(f"Valor: **R$ {dados['Preco_Mesa']}**")
                 st.sidebar.markdown("---")
                 
-                # AQUI ESTÁ A MUDANÇA: CAMPOS SOLTOS SEM 'st.form'
-                # Usamos key=f"nome_{m_id}" para limpar quando troca de mesa
                 cli = st.sidebar.text_input("Nome Cliente", key=f"cli_{m_id}")
                 fest = st.sidebar.text_input("Festeiro", key=f"fest_{m_id}")
                 tel = st.sidebar.text_input("Telefone", key=f"tel_{m_id}")
                 
-                # O botão agora é um botão normal, só salva se clicar nele
                 if st.sidebar.button("💾 SALVAR RESERVA", type="primary"):
                     if not cli:
                         st.sidebar.error("Preencha o nome do cliente!")
@@ -242,7 +244,20 @@ with tab_mapa:
 
 
 # ==========================================
-# ABA 2: FINANCEIRO
+# ABA 2: VISUALIZAR MAPA (SÓ A IMAGEM)
+# ==========================================
+with tab_visual:
+    st.header("Layout do Salão")
+    st.caption("Apenas visualização. Para reservar, use a primeira aba.")
+    
+    if os.path.exists(NOME_IMAGEM_LAYOUT):
+        st.image(NOME_IMAGEM_LAYOUT, caption="Mapa Geral", use_container_width=True)
+    else:
+        st.warning(f"Imagem '{NOME_IMAGEM_LAYOUT}' não encontrada no sistema.")
+
+
+# ==========================================
+# ABA 3: RELATORIO FINANCEIRO
 # ==========================================
 with tab_financeiro:
     st.header("Visão Geral")
