@@ -10,7 +10,7 @@ import os # Importante para checar se a imagem existe
 st.set_page_config(page_title="Gestão Festa São Pedro", layout="wide")
 
 # NOME DA IMAGEM
-NOME_IMAGEM_LAYOUT = "banda na praça (1).png"
+NOME_IMAGEM_LAYOUT = "banda na praça (3).png"
 
 # --- 1. FUNÇÃO DE LIMPEZA ---
 def limpar_numero_inteligente(valor):
@@ -293,3 +293,4 @@ with tab_financeiro:
         st.dataframe(tabela_vendas, use_container_width=True)
     else:
         st.info("Nenhuma venda confirmada ainda.")
+
