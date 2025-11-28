@@ -120,7 +120,7 @@ def desenhar_grade_mesas(dataframe_setor, max_cols):
                 col_obj.write("")
 
 # --- INÍCIO DO APP ---
-st.title("Reserva de Mesa Festa São Pedro 2026")
+st.title("Reserva de Mesa Festa de São Pedro 2026")
 
 try:
     df_layout, df_reservas = carregar_dados()
@@ -253,3 +253,4 @@ with tab_financeiro:
     st.subheader("Extrato Detalhado")
     if not vendidas.empty:
         st.dataframe(vendidas[["Numero_Display", "Nome_Cliente", "Valor_Entrada_Cobrado"]], use_container_width=True)
+
