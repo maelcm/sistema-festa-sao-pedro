@@ -101,7 +101,7 @@ def cancelar(id_venda):
         st.rerun()
 
 # --- 5. INTERFACE PRINCIPAL ---
-st.title("🤠 Sistema Festa São Pedro")
+st.title("Reserva de Mesa Festa São Pedro 2026")
 
 try:
     df_layout, df_reservas = carregar_dados()
@@ -122,7 +122,7 @@ else:
 # ==========================================
 # ABAS
 # ==========================================
-tab_mapa, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "📊 FINANCEIRO"])
+tab_mapa, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "📊 RELATORIO"])
 
 
 # ==========================================
@@ -245,7 +245,7 @@ with tab_mapa:
 # ABA 2: FINANCEIRO
 # ==========================================
 with tab_financeiro:
-    st.header("Visão Geral do Evento")
+    st.header("Visão Geral")
     
     total_mesas = len(df_full)
     vendidas = df_full[df_full["Status"] == "Vendido"]
