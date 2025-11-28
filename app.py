@@ -16,16 +16,12 @@ NOME_IMAGEM_LAYOUT = "banda na praça (1).png"
 def limpar_numero_inteligente(valor):
     valor_str = str(valor).upper().strip()
     if not valor_str or valor_str == "NONE" or valor_str == "NAN": return 0.0
-    
     if "R$" in valor_str or "," in valor_str or "." in valor_str:
         limpo = valor_str.replace("R$", "").replace(" ", "")
-        if "." in limpo and "," in limpo:
-            limpo = limpo.replace(".", "").replace(",", ".")
-        elif "," in limpo:
-            limpo = limpo.replace(",", ".")
+        if "." in limpo and "," in limpo: limpo = limpo.replace(".", "").replace(",", ".")
+        elif "," in limpo: limpo = limpo.replace(",", ".")
         try: return float(limpo)
         except: return 0.0
-
     numeros = re.findall(r'\d+', valor_str)
     if numeros: return int(numeros[0])
     return 0.0
@@ -34,39 +30,37 @@ def limpar_numero_inteligente(valor):
 @st.cache_resource
 def conectar_gsheets():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    
     if "gcp_service_account" in st.secrets:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     else:
         try:
             creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
-        except FileNotFoundError:
-            # Tenta caminho absoluto se falhar (ajuste se necessário)
+        except:
             creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
-
     client = gspread.authorize(creds)
     return client.open_by_key("1fvhCzt2ieZ4s-paXd3GLWgJho-9JE2oXCl14qKSpGDo")
 
 # --- 3. CARREGAR DADOS ---
 def carregar_dados():
     sh = conectar_gsheets()
-    
-    # Layout
     ws_layout = sh.worksheet("Layout_Mesas")
     df = pd.DataFrame(ws_layout.get_all_records())
     
+    # Converte colunas chave para numero
     df['Linha_Num'] = df['Linha'].apply(limpar_numero_inteligente)
     df['Coluna_Num'] = df['Coluna'].apply(limpar_numero_inteligente)
     df['Preco_Num'] = df['Preco_Mesa'].apply(limpar_numero_inteligente)
+    
+    # Garante que Tipo_Item seja texto limpo e maiúsculo para agrupar certo
+    df['Tipo_Item'] = df['Tipo_Item'].astype(str).str.strip().str.upper()
+    
     df = df[df['Linha_Num'] > 0] 
 
-    # Reservas
     try:
         ws_res = sh.worksheet("RESERVAS")
         df_res = pd.DataFrame(ws_res.get_all_records())
     except:
         df_res = pd.DataFrame()
-
     return df, df_res
 
 # --- 4. FUNÇÕES DE AÇÃO ---
@@ -100,23 +94,18 @@ def cancelar(id_venda):
         st.session_state["mesa_id"] = None
         st.rerun()
 
-# --- 5. FUNÇÃO PARA DESENHAR O GRID ---
+# --- 5. FUNÇÃO DE DESENHO DO GRID ---
 def desenhar_grade_mesas(dataframe_setor, max_cols):
-    # Pega as linhas presentes nesse setor
     linhas = dataframe_setor['Linha_Num'].unique()
     linhas.sort()
-    
     for l in linhas:
         c_cols = st.columns(int(max_cols))
         for i, col_obj in enumerate(c_cols):
-            # Procura a mesa na posição exata (Linha x Coluna)
             item = dataframe_setor[(dataframe_setor["Linha_Num"] == l) & (dataframe_setor["Coluna_Num"] == (i + 1))]
-            
             if not item.empty:
                 d = item.iloc[0]
                 st_mesa = d["Status"]
                 
-                # Cores do botão
                 if st_mesa == "Vendido": 
                     btn_label = f"🔴 {d['Numero_Display']}"
                 elif st_mesa == "Reservado": 
@@ -124,7 +113,6 @@ def desenhar_grade_mesas(dataframe_setor, max_cols):
                 else: 
                     btn_label = f"🟢 {d['Numero_Display']}"
                 
-                # Botão
                 if col_obj.button(btn_label, key=f"btn_{d['ID_Mesa']}", use_container_width=True):
                     st.session_state["mesa_id"] = d["ID_Mesa"]
                     st.rerun()
@@ -140,7 +128,6 @@ except Exception as e:
     st.error(f"Erro de conexão: {e}")
     st.stop()
 
-# Cruzamento de dados
 if not df_reservas.empty:
     df_res_sorted = df_reservas.sort_values(by="Data_Reserva", ascending=False)
     df_res_limpo = df_res_sorted.drop_duplicates(subset=["Ref_Mesa"])
@@ -155,26 +142,14 @@ else:
 # ==========================================
 tab_mapa, tab_visual, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "👁️ VISUALIZAR IMAGEM", "📊 RELATÓRIO"])
 
-
 # ==========================================
-# ABA 1: MAPA SEPARADO POR SETORES
+# ABA 1: MAPA EM BLOCOS (FIXO)
 # ==========================================
 with tab_mapa:
     
-    # Filtro opcional no topo
-    lista_setores = ["Visão Geral"] # "Visão Geral" mostra todos separados por blocos
-    if "Tipo_Item" in df_full.columns:
-        # Pega os setores únicos na ordem que aparecem na planilha
-        unicos = [x for x in df_full["Tipo_Item"].unique() if str(x) != ""]
-        lista_setores += unicos
-        
-    col_filtro, _ = st.columns([1, 3])
-    with col_filtro:
-        escolha_setor = st.selectbox("Filtrar Visualização:", lista_setores)
-    
     st.caption("Legenda: 🟢 Livre | 🟡 Reservado | 🔴 Vendido")
-
-    # --- SIDEBAR (FORMULÁRIO LATERAL) ---
+    
+    # --- SIDEBAR LATERAL ---
     if "mesa_id" not in st.session_state:
         st.session_state["mesa_id"] = None
     m_id = st.session_state["mesa_id"]
@@ -189,27 +164,22 @@ with tab_mapa:
             st.sidebar.info(f"📍 {dados['Linha']}")
             st.sidebar.caption(f"Setor: {dados.get('Tipo_Item', '-')}")
             
-            # --- TELA LIVRE ---
             if status == "Livre":
                 st.sidebar.write(f"Valor: **R$ {dados['Preco_Mesa']}**")
                 st.sidebar.markdown("---")
                 cli = st.sidebar.text_input("Nome Cliente", key=f"cli_{m_id}")
                 fest = st.sidebar.text_input("Festeiro", key=f"fest_{m_id}")
                 tel = st.sidebar.text_input("Telefone", key=f"tel_{m_id}")
-                
                 if st.sidebar.button("💾 SALVAR RESERVA", type="primary"):
-                    if not cli: st.sidebar.error("Nome obrigatório!")
+                    if not cli: st.sidebar.error("Preencha o nome!")
                     else:
                         nid = f"RES-{int(datetime.now().timestamp())}"
                         lin = [nid, m_id, "Reservado", cli, fest, tel, "", str(datetime.now()), ""]
                         salvar_reserva(lin)
             
-            # --- TELA RESERVADO ---
             elif status == "Reservado":
                 st.sidebar.warning("RESERVADO")
-                st.sidebar.write(f"👤 **{dados['Nome_Cliente']}**")
-                st.sidebar.write(f"📞 {dados['Telefone_Cliente']}")
-                
+                st.sidebar.write(f"👤 {dados['Nome_Cliente']}")
                 col1, col2 = st.sidebar.columns(2)
                 if col1.button("💲 PAGO"):
                     val_padrao = dados['Preco_Num']
@@ -217,46 +187,52 @@ with tab_mapa:
                 if col2.button("❌ CANCELAR"):
                     cancelar(dados["ID_Venda"])
             
-            # --- TELA VENDIDO ---
             elif status == "Vendido":
                 st.sidebar.success("VENDIDO")
                 st.sidebar.write(f"👤 {dados['Nome_Cliente']}")
                 if st.sidebar.button("Desfazer Venda"):
                     atualizar_status(dados["ID_Venda"], "Reservado", "")
 
-    # --- DESENHO DOS BLOCOS ---
-    # Define maximo de colunas para alinhar todos os setores iguais (estética)
+
+    # --- BLOCOS DE SETORES ---
+    # Aqui definimos a ordem exata que você pediu.
+    # O sistema vai procurar exatamente esses nomes na coluna Tipo_Item (convertido para maiúsculo)
+    
+    ORDEM_SETORES = ["PATROCINADOR", "SETOR A", "SETOR B", "SETOR C"]
+    
     max_cols_geral = df_full['Coluna_Num'].max() if not df_full.empty else 10
 
-    if escolha_setor == "Visão Geral":
-        # Modo: Mostra todos os setores, um embaixo do outro
-        setores_para_mostrar = [s for s in lista_setores if s != "Visão Geral"]
+    # 1. Desenha os setores na ordem da sua lista
+    for setor_nome in ORDEM_SETORES:
+        # Filtra o dataframe procurando esse nome
+        df_subset = df_full[df_full["Tipo_Item"] == setor_nome]
         
-        for setor_atual in setores_para_mostrar:
-            df_subset = df_full[df_full["Tipo_Item"] == setor_atual]
-            if not df_subset.empty:
-                st.markdown(f"### 🏷️ {setor_atual}") # Título do Setor
-                desenhar_grade_mesas(df_subset, max_cols_geral)
-                st.markdown("---") # Divisória
-    else:
-        # Modo: Mostra só um setor escolhido
-        df_subset = df_full[df_full["Tipo_Item"] == escolha_setor]
-        st.markdown(f"### 🏷️ {escolha_setor}")
+        if not df_subset.empty:
+            st.markdown(f"### 🏷️ {setor_nome}")
+            desenhar_grade_mesas(df_subset, max_cols_geral)
+            st.markdown("---")
+    
+    # 2. Desenha qualquer outro setor que esteja na planilha mas não na lista acima (Segurança)
+    outros_setores = [x for x in df_full["Tipo_Item"].unique() if x not in ORDEM_SETORES and x != ""]
+    for setor_extra in outros_setores:
+        st.markdown(f"### 🏷️ {setor_extra}")
+        df_subset = df_full[df_full["Tipo_Item"] == setor_extra]
         desenhar_grade_mesas(df_subset, max_cols_geral)
+        st.markdown("---")
 
 
 # ==========================================
-# ABA 2: VISUALIZAR IMAGEM
+# ABA 2: VISUALIZAR
 # ==========================================
 with tab_visual:
     st.header("Layout do Salão")
     if os.path.exists(NOME_IMAGEM_LAYOUT):
-        st.image(NOME_IMAGEM_LAYOUT, caption="Mapa Geral para Consulta", use_container_width=True)
+        st.image(NOME_IMAGEM_LAYOUT, caption="Mapa Geral", use_container_width=True)
     else:
         st.warning(f"Imagem '{NOME_IMAGEM_LAYOUT}' não encontrada.")
 
 # ==========================================
-# ABA 3: RELATÓRIO
+# ABA 3: RELATORIO
 # ==========================================
 with tab_financeiro:
     st.header("Resumo Financeiro")
