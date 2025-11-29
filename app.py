@@ -46,14 +46,10 @@ def carregar_dados():
     ws_layout = sh.worksheet("Layout_Mesas")
     df = pd.DataFrame(ws_layout.get_all_records())
     
-    # Converte colunas chave para numero
     df['Linha_Num'] = df['Linha'].apply(limpar_numero_inteligente)
     df['Coluna_Num'] = df['Coluna'].apply(limpar_numero_inteligente)
     df['Preco_Num'] = df['Preco_Mesa'].apply(limpar_numero_inteligente)
-    
-    # Garante que Tipo_Item seja texto limpo e maiúsculo para agrupar certo
     df['Tipo_Item'] = df['Tipo_Item'].astype(str).str.strip().str.upper()
-    
     df = df[df['Linha_Num'] > 0] 
 
     try:
@@ -147,9 +143,8 @@ tab_mapa, tab_visual, tab_financeiro = st.tabs(["MAPA DE MESAS", "VISUALIZAR IMA
 # ==========================================
 with tab_mapa:
     
-    st.caption("Legenda: 🟢 Livre | 🟡 Reservado | 🔴 Vendido")
-    
-    # --- SIDEBAR LATERAL ---
+    # --- FORMULÁRIO NO CENTRO (ACIMA DO MAPA) ---
+    # Aqui verificamos se tem uma mesa selecionada. Se tiver, desenha o formulário aqui!
     if "mesa_id" not in st.session_state:
         st.session_state["mesa_id"] = None
     m_id = st.session_state["mesa_id"]
@@ -160,40 +155,60 @@ with tab_mapa:
             dados = filtro.iloc[0]
             status = dados["Status"] if pd.notna(dados["Status"]) else "Livre"
             
-            st.sidebar.subheader(f"Mesa {dados['Numero_Display']}")
-            st.sidebar.info(f"📍 {dados['Linha']}")
-            st.sidebar.caption(f"Setor: {dados.get('Tipo_Item', '-')}")
-            
-            if status == "Livre":
-                st.sidebar.write(f"Valor: **R$ {dados['Preco_Mesa']}**")
-                st.sidebar.markdown("---")
-                cli = st.sidebar.text_input("Nome Cliente", key=f"cli_{m_id}")
-                fest = st.sidebar.text_input("Festeiro", key=f"fest_{m_id}")
-                tel = st.sidebar.text_input("Telefone", key=f"tel_{m_id}")
-                if st.sidebar.button("💾 SALVAR RESERVA", type="primary"):
-                    if not cli: st.sidebar.error("Preencha o nome!")
-                    else:
-                        nid = f"RES-{int(datetime.now().timestamp())}"
-                        lin = [nid, m_id, "Reservado", cli, fest, tel, "", str(datetime.now()), ""]
-                        salvar_reserva(lin)
-            
-            elif status == "Reservado":
-                st.sidebar.warning("RESERVADO")
-                st.sidebar.write(f"👤 {dados['Nome_Cliente']}")
-                col1, col2 = st.sidebar.columns(2)
-                if col1.button("💲 PAGO"):
-                    val_padrao = dados['Preco_Num']
-                    atualizar_status(dados["ID_Venda"], "Vendido", val_padrao)
-                if col2.button("❌ CANCELAR"):
-                    cancelar(dados["ID_Venda"])
-            
-            elif status == "Vendido":
-                st.sidebar.success("VENDIDO")
-                st.sidebar.write(f"👤 {dados['Nome_Cliente']}")
-                if st.sidebar.button("Desfazer Venda"):
-                    atualizar_status(dados["ID_Venda"], "Reservado", "")
+            # Cria uma caixa em destaque (Expander) que já vem aberta
+            with st.expander(f"📝 GERENCIAR MESA {dados['Numero_Display']} ({status})", expanded=True):
+                st.info(f"📍 Setor: {dados.get('Tipo_Item', '-')} | Linha: {dados['Linha']}")
+                
+                # --- TELA LIVRE ---
+                if status == "Livre":
+                    st.write(f"Valor: **R$ {dados['Preco_Mesa']}**")
+                    col_form1, col_form2 = st.columns(2)
+                    cli = col_form1.text_input("Nome Cliente", key=f"cli_{m_id}")
+                    tel = col_form2.text_input("Telefone", key=f"tel_{m_id}")
+                    fest = st.text_input("Festeiro (Indicação)", key=f"fest_{m_id}")
+                    
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    if col_btn1.button("💾 SALVAR RESERVA", type="primary", use_container_width=True):
+                        if not cli: st.error("Nome obrigatório!")
+                        else:
+                            nid = f"RES-{int(datetime.now().timestamp())}"
+                            lin = [nid, m_id, "Reservado", cli, fest, tel, "", str(datetime.now()), ""]
+                            salvar_reserva(lin)
+                    
+                    if col_btn2.button("FECHAR X", use_container_width=True):
+                        st.session_state["mesa_id"] = None
+                        st.rerun()
 
+                # --- TELA RESERVADO ---
+                elif status == "Reservado":
+                    st.warning(f"RESERVADO para: {dados['Nome_Cliente']}")
+                    st.write(f"📞 {dados['Telefone_Cliente']}")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    if col1.button("💲 PAGO", use_container_width=True):
+                        val_padrao = dados['Preco_Num']
+                        atualizar_status(dados["ID_Venda"], "Vendido", val_padrao)
+                    if col2.button("❌ CANCELAR", use_container_width=True):
+                        cancelar(dados["ID_Venda"])
+                    if col3.button("FECHAR X", use_container_width=True):
+                        st.session_state["mesa_id"] = None
+                        st.rerun()
+                
+                # --- TELA VENDIDO ---
+                elif status == "Vendido":
+                    st.success(f"VENDIDO para: {dados['Nome_Cliente']}")
+                    col1, col2 = st.columns(2)
+                    if col1.button("Desfazer Venda", use_container_width=True):
+                        atualizar_status(dados["ID_Venda"], "Reservado", "")
+                    if col2.button("FECHAR X", use_container_width=True):
+                        st.session_state["mesa_id"] = None
+                        st.rerun()
+        else:
+            st.error("Erro ao carregar dados da mesa.")
 
+    st.markdown("---")
+    st.caption("Legenda: 🟢 Livre | 🟡 Reservado | 🔴 Vendido")
+    
     # --- BLOCOS DE SETORES ---
     ORDEM_SETORES = ["PATROCINADOR", "SETOR A", "SETOR B", "SETOR C"]
     max_cols_geral = df_full['Coluna_Num'].max() if not df_full.empty else 10
@@ -224,37 +239,31 @@ with tab_visual:
         st.warning(f"Imagem '{NOME_IMAGEM_LAYOUT}' não encontrada.")
 
 # ==========================================
-# ABA 3: RELATÓRIO (ATUALIZADO)
+# ABA 3: RELATÓRIO
 # ==========================================
 with tab_financeiro:
     st.header("Resumo Financeiro e Ocupação")
     
-    # Cálculos
     total = len(df_full)
     vendidas = df_full[df_full["Status"] == "Vendido"]
     reservadas = df_full[df_full["Status"] == "Reservado"]
-    # Mesas ocupadas (para o extrato)
     ocupadas = df_full[df_full["Status"].isin(["Vendido", "Reservado"])]
-    
     livres = total - (len(vendidas) + len(reservadas))
 
     caixa = vendidas["Valor_Entrada_Cobrado"].apply(limpar_numero_inteligente).sum() if not vendidas.empty else 0
     receber = reservadas["Preco_Num"].sum() if not reservadas.empty else 0
 
-    # KPIs - Agora com 5 colunas para mostrar a quantidade de RESERVADAS separada
     c1, c2, c3, c4, c5 = st.columns(5)
-    
     c1.metric("💰 CAIXA", f"R$ {caixa:,.2f}", delta="Recebido")
     c2.metric("💸 A RECEBER", f"R$ {receber:,.2f}", delta="Pendente", delta_color="off")
     c3.metric("🔴 VENDIDAS", f"{len(vendidas)}")
-    c4.metric("🟡 RESERVADAS", f"{len(reservadas)}") # <--- NOVA COLUNA
+    c4.metric("🟡 RESERVADAS", f"{len(reservadas)}")
     c5.metric("🟢 LIVRES", f"{livres}")
     
     st.markdown("---")
     st.subheader("Extrato Detalhado (Vendas e Reservas)")
     
     if not ocupadas.empty:
-        # Mostra tanto Vendidas quanto Reservadas, com a coluna Status para diferenciar
         df_view = ocupadas[["Numero_Display", "Status", "Nome_Cliente", "Telefone_Cliente", "Preco_Mesa", "Valor_Entrada_Cobrado"]]
         st.dataframe(df_view, use_container_width=True)
     else:
