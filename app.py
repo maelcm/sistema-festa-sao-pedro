@@ -63,9 +63,11 @@ def carregar_dados():
 def salvar_reserva(dados):
     sh = conectar_gsheets()
     sh.worksheet("RESERVAS").append_row(dados)
-    st.toast("Reserva Salva!", icon="✅")
-    st.session_state["mesa_id"] = None
-    st.rerun()
+    st.toast("Reserva Salva com Sucesso!", icon="✅")
+    
+    # --- O SEGREDO ESTÁ AQUI EMBAIXO ---
+    st.session_state["mesa_id"] = None  # Isso força o formulário a fechar
+    st.rerun() # Recarrega a página limpa
 
 def atualizar_status(id_venda, status, valor=0):
     sh = conectar_gsheets()
@@ -77,7 +79,7 @@ def atualizar_status(id_venda, status, valor=0):
             ws.update_cell(cell.row, 7, valor)
             ws.update_cell(cell.row, 9, str(datetime.now()))
     st.toast("Status Atualizado!", icon="💰")
-    st.session_state["mesa_id"] = None
+    st.session_state["mesa_id"] = None # Fecha o formulário também
     st.rerun()
 
 def cancelar(id_venda):
@@ -87,7 +89,7 @@ def cancelar(id_venda):
     if cell:
         ws.delete_rows(cell.row)
         st.toast("Cancelado!", icon="🗑️")
-        st.session_state["mesa_id"] = None
+        st.session_state["mesa_id"] = None # Fecha o formulário também
         st.rerun()
 
 # --- 5. FUNÇÃO DE DESENHO DO GRID ---
@@ -109,6 +111,7 @@ def desenhar_grade_mesas(dataframe_setor, max_cols):
                 else: 
                     btn_label = f"🟢 {d['Numero_Display']}"
                 
+                # Se clicar no botão, define a mesa e recarrega
                 if col_obj.button(btn_label, key=f"btn_{d['ID_Mesa']}", use_container_width=True):
                     st.session_state["mesa_id"] = d["ID_Mesa"]
                     st.rerun()
@@ -143,8 +146,7 @@ tab_mapa, tab_visual, tab_financeiro = st.tabs(["MAPA DE MESAS", "VISUALIZAR IMA
 # ==========================================
 with tab_mapa:
     
-    # --- FORMULÁRIO NO CENTRO (ACIMA DO MAPA) ---
-    # Aqui verificamos se tem uma mesa selecionada. Se tiver, desenha o formulário aqui!
+    # --- FORMULÁRIO NO CENTRO (EXPANSÍVEL) ---
     if "mesa_id" not in st.session_state:
         st.session_state["mesa_id"] = None
     m_id = st.session_state["mesa_id"]
@@ -155,7 +157,7 @@ with tab_mapa:
             dados = filtro.iloc[0]
             status = dados["Status"] if pd.notna(dados["Status"]) else "Livre"
             
-            # Cria uma caixa em destaque (Expander) que já vem aberta
+            # Caixa do Formulário - Abre automaticamente
             with st.expander(f"📝 GERENCIAR MESA {dados['Numero_Display']} ({status})", expanded=True):
                 st.info(f"📍 Setor: {dados.get('Tipo_Item', '-')} | Linha: {dados['Linha']}")
                 
@@ -173,7 +175,7 @@ with tab_mapa:
                         else:
                             nid = f"RES-{int(datetime.now().timestamp())}"
                             lin = [nid, m_id, "Reservado", cli, fest, tel, "", str(datetime.now()), ""]
-                            salvar_reserva(lin)
+                            salvar_reserva(lin) # Ao salvar, o formulário fecha
                     
                     if col_btn2.button("FECHAR X", use_container_width=True):
                         st.session_state["mesa_id"] = None
@@ -203,8 +205,6 @@ with tab_mapa:
                     if col2.button("FECHAR X", use_container_width=True):
                         st.session_state["mesa_id"] = None
                         st.rerun()
-        else:
-            st.error("Erro ao carregar dados da mesa.")
 
     st.markdown("---")
     st.caption("Legenda: 🟢 Livre | 🟡 Reservado | 🔴 Vendido")
