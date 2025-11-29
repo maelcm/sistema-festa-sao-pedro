@@ -140,7 +140,7 @@ else:
 # ==========================================
 # ABAS
 # ==========================================
-tab_mapa, tab_visual, tab_financeiro = st.tabs(["🗺️ MAPA DE MESAS", "👁️ VISUALIZAR IMAGEM", "📊 RELATÓRIO"])
+tab_mapa, tab_visual, tab_financeiro = st.tabs(["MAPA DE MESAS", "VISUALIZAR IMAGEM DO MAPA", "RELATÓRIO"])
 
 # ==========================================
 # ABA 1: MAPA EM BLOCOS (FIXO)
@@ -195,24 +195,16 @@ with tab_mapa:
 
 
     # --- BLOCOS DE SETORES ---
-    # Aqui definimos a ordem exata que você pediu.
-    # O sistema vai procurar exatamente esses nomes na coluna Tipo_Item (convertido para maiúsculo)
-    
     ORDEM_SETORES = ["PATROCINADOR", "SETOR A", "SETOR B", "SETOR C"]
-    
     max_cols_geral = df_full['Coluna_Num'].max() if not df_full.empty else 10
 
-    # 1. Desenha os setores na ordem da sua lista
     for setor_nome in ORDEM_SETORES:
-        # Filtra o dataframe procurando esse nome
         df_subset = df_full[df_full["Tipo_Item"] == setor_nome]
-        
         if not df_subset.empty:
             st.markdown(f"### 🏷️ {setor_nome}")
             desenhar_grade_mesas(df_subset, max_cols_geral)
             st.markdown("---")
     
-    # 2. Desenha qualquer outro setor que esteja na planilha mas não na lista acima (Segurança)
     outros_setores = [x for x in df_full["Tipo_Item"].unique() if x not in ORDEM_SETORES and x != ""]
     for setor_extra in outros_setores:
         st.markdown(f"### 🏷️ {setor_extra}")
@@ -222,35 +214,48 @@ with tab_mapa:
 
 
 # ==========================================
-# ABA 2: VISUALIZAR
+# ABA 2: VISUALIZAR IMAGEM
 # ==========================================
 with tab_visual:
     st.header("Layout do Salão")
     if os.path.exists(NOME_IMAGEM_LAYOUT):
-        st.image(NOME_IMAGEM_LAYOUT, caption="Mapa Geral", use_container_width=True)
+        st.image(NOME_IMAGEM_LAYOUT, caption="Mapa Geral para Consulta", use_container_width=True)
     else:
         st.warning(f"Imagem '{NOME_IMAGEM_LAYOUT}' não encontrada.")
 
 # ==========================================
-# ABA 3: RELATORIO
+# ABA 3: RELATÓRIO (ATUALIZADO)
 # ==========================================
 with tab_financeiro:
-    st.header("Resumo Financeiro")
+    st.header("Resumo Financeiro e Ocupação")
+    
+    # Cálculos
     total = len(df_full)
     vendidas = df_full[df_full["Status"] == "Vendido"]
     reservadas = df_full[df_full["Status"] == "Reservado"]
+    # Mesas ocupadas (para o extrato)
+    ocupadas = df_full[df_full["Status"].isin(["Vendido", "Reservado"])]
+    
     livres = total - (len(vendidas) + len(reservadas))
 
     caixa = vendidas["Valor_Entrada_Cobrado"].apply(limpar_numero_inteligente).sum() if not vendidas.empty else 0
     receber = reservadas["Preco_Num"].sum() if not reservadas.empty else 0
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 CAIXA", f"R$ {caixa:,.2f}")
-    c2.metric("🟡 A RECEBER", f"R$ {receber:,.2f}")
-    c3.metric("🔴 VENDIDAS", f"{len(vendidas)}")
-    c4.metric("🟢 LIVRES", f"{livres}")
+    # KPIs - Agora com 5 colunas para mostrar a quantidade de RESERVADAS separada
+    c1, c2, c3, c4, c5 = st.columns(5)
     
-    st.subheader("Extrato Detalhado")
-    if not vendidas.empty:
-        st.dataframe(vendidas[["Numero_Display", "Nome_Cliente", "Valor_Entrada_Cobrado"]], use_container_width=True)
-
+    c1.metric("💰 CAIXA", f"R$ {caixa:,.2f}", delta="Recebido")
+    c2.metric("💸 A RECEBER", f"R$ {receber:,.2f}", delta="Pendente", delta_color="off")
+    c3.metric("🔴 VENDIDAS", f"{len(vendidas)}")
+    c4.metric("🟡 RESERVADAS", f"{len(reservadas)}") # <--- NOVA COLUNA
+    c5.metric("🟢 LIVRES", f"{livres}")
+    
+    st.markdown("---")
+    st.subheader("Extrato Detalhado (Vendas e Reservas)")
+    
+    if not ocupadas.empty:
+        # Mostra tanto Vendidas quanto Reservadas, com a coluna Status para diferenciar
+        df_view = ocupadas[["Numero_Display", "Status", "Nome_Cliente", "Telefone_Cliente", "Preco_Mesa", "Valor_Entrada_Cobrado"]]
+        st.dataframe(df_view, use_container_width=True)
+    else:
+        st.info("Nenhuma venda ou reserva realizada ainda.")
